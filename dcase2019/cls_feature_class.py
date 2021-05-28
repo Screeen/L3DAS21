@@ -375,6 +375,10 @@ class FeatureClass:
         logger.info('\t\taud_dir {}\n\t\tdesc_dir {}\n\t\tfeat_dir {}'.format(
             self._aud_dir, self._desc_dir, self._feat_dir))
 
+        if not(os.path.exists(self._desc_dir)):
+            logger.error(f"self._desc_dir {self._desc_dir} does not exists. Skipping.")
+            return
+
         dirs = os.listdir(self._desc_dir)
         for file_cnt, file_name in enumerate(dirs):
             logger.info('file_cnt {}, file_name {}'.format(file_cnt, file_name))
@@ -458,6 +462,10 @@ class FeatureClass:
         logger.info('\t\taud_dir {}\n\t\tdesc_dir {}\n\t\tlabel_dir {}'.format(
             self._aud_dir, self._desc_dir, self._label_dir))
         utils.create_folder(self._label_dir)
+
+        if not(os.path.exists(self._desc_dir)):
+            logger.error(f"self._desc_dir {self._desc_dir} does not exists. Skipping.")
+            return
 
         for file_cnt, file_name in enumerate(os.listdir(self._desc_dir)):
             logger.info('file_cnt {}, file_name {}'.format(file_cnt, file_name))

@@ -174,6 +174,78 @@ def preprocessing_task1(args):
     print ('Validation set shape: ', np.array(predictors_validation).shape, np.array(target_validation).shape)
     print ('Test set shape: ', np.array(predictors_test).shape, np.array(target_test).shape)
 
+def process_folder_task2(folder, args):
+    sr_task2 = 32000
+    print ('Processing ' + folder + ' folder...')
+    predictors = []
+    target = []
+    data_path = os.path.join(folder, 'data')
+    labels_path = os.path.join(folder, 'labels')
+
+    data = os.listdir(data_path)
+    data = [i for i in data if i.split('.')[0].split('_')[-1]=='A']
+    count = 0
+    for sound in data:
+        ov_set = sound.split('_')[-3]
+        if ov_set in args.ov_subsets:  #if data point is in the desired subsets ov
+            target_name = 'label_' + sound.replace('_A', '').replace('.wav', '.csv')
+            sound_path = os.path.join(data_path, sound)
+            target_path = os.path.join(data_path, target_name)
+            target_path = '/'.join((target_path.split('/')[:-2] + ['labels'] + [target_path.split('/')[-1]]))  #change data with labels
+            #target_path = target_path.replace('data', 'labels')  #old
+            samples, sr = librosa.load(sound_path, sr_task2, mono=False)
+            if args.num_mics == 2:  # if both ambisonics mics are wanted
+                #stack the additional 4 channels to get a (8, samples) shape
+                B_sound_path = sound_path[:-5] + 'B' +  sound_path[-4:]  #change A with B
+                #B_sound_path = sound_path.replace('A', 'B')  old
+                samples_B, sr = librosa.load(B_sound_path, sr_task2, mono=False)
+                samples = np.concatenate((samples,samples_B), axis=-2)
+
+            #compute stft
+
+            stft = uf.spectrum_fast(samples, nperseg=args.stft_nperseg,
+                                    noverlap=args.stft_noverlap,
+                                    window=args.stft_window,
+                                    output_phase=args.output_phase)
+
+            #stft = np.reshape(samples, (samples.shape[1], samples.shape[0],
+            #                     samples.shape[2]))
+
+
+            #compute matrix label
+            label = uf.csv_to_matrix_task2(target_path, sound_classes_dict_task2,
+                                           dur=60, step=args.frame_len/1000., max_loc_value=2.,
+                                           no_overlaps=args.no_overlaps)  #eric func
+
+            #label = uf.get_label_task2(target_path,0.1,file_size,sr_task2,          #giuseppe func
+            #                        sound_classes,int(file_size/(args.frame_len/1000.)),
+            #                        max_label_distance)
+
+
+            #segment into shorter frames
+            if args.predictors_len_segment is not None and args.target_len_segment is not None:
+                #segment longer file to shorter frames
+                #not padding if segmenting to avoid silence frames
+                predictors_cuts, target_cuts = uf.segment_task2(stft, label, predictors_len_segment=args.predictors_len_segment,
+                                                target_len_segment=args.target_len_segment, overlap=args.segment_overlap)
+
+                for i in range(len(predictors_cuts)):
+                    predictors.append(predictors_cuts[i])
+                    target.append(target_cuts[i])
+                    #print (predictors_cuts[i].shape, target_cuts[i].shape)
+            else:
+
+                predictors.append(stft)
+                target.append(label)
+
+            #print (samples.shape, np.max(label), np.min(label))
+
+            count += 1
+            if args.num_data is not None and count >= args.num_data:
+                break
+
+
+    return predictors, target
 
 def preprocessing_task2(args):
     '''
@@ -188,7 +260,6 @@ def preprocessing_task2(args):
                                  -168: 14 (clases) * 3 (max simultaneous sounds per frame)
                                        concatenated to 14 (classes) * 3 (max simultaneous sounds per frame) * 3 (xyz coordinates)
     '''
-    sr_task2 = 32000
     sound_classes=['Chink_and_clink','Computer_keyboard','Cupboard_open_or_close',
              'Drawer_open_or_close','Female_speech_and_woman_speaking',
              'Finger_snapping','Keys_jangling','Knock',
@@ -197,117 +268,119 @@ def preprocessing_task2(args):
     file_size=60.0
     max_label_distance = 2.  #maximum xyz value (serves for normalization)
 
-    def process_folder(folder, args):
-        print ('Processing ' + folder + ' folder...')
-        predictors = []
-        target = []
-        data_path = os.path.join(folder, 'data')
-        labels_path = os.path.join(folder, 'labels')
-
-        data = os.listdir(data_path)
-        data = [i for i in data if i.split('.')[0].split('_')[-1]=='A']
-        count = 0
-        for sound in data:
-            ov_set = sound.split('_')[-3]
-            if ov_set in args.ov_subsets:  #if data point is in the desired subsets ov
-                target_name = 'label_' + sound.replace('_A', '').replace('.wav', '.csv')
-                sound_path = os.path.join(data_path, sound)
-                target_path = os.path.join(data_path, target_name)
-                target_path = '/'.join((target_path.split('/')[:-2] + ['labels'] + [target_path.split('/')[-1]]))  #change data with labels
-                #target_path = target_path.replace('data', 'labels')  #old
-                samples, sr = librosa.load(sound_path, sr_task2, mono=False)
-                if args.num_mics == 2:  # if both ambisonics mics are wanted
-                    #stack the additional 4 channels to get a (8, samples) shape
-                    B_sound_path = sound_path[:-5] + 'B' +  sound_path[-4:]  #change A with B
-                    #B_sound_path = sound_path.replace('A', 'B')  old
-                    samples_B, sr = librosa.load(B_sound_path, sr_task2, mono=False)
-                    samples = np.concatenate((samples,samples_B), axis=-2)
-
-                #compute stft
-
-                stft = uf.spectrum_fast(samples, nperseg=args.stft_nperseg,
-                                        noverlap=args.stft_noverlap,
-                                        window=args.stft_window,
-                                        output_phase=args.output_phase)
-
-                #stft = np.reshape(samples, (samples.shape[1], samples.shape[0],
-                #                     samples.shape[2]))
-
-
-                #compute matrix label
-                label = uf.csv_to_matrix_task2(target_path, sound_classes_dict_task2,
-                                               dur=60, step=args.frame_len/1000., max_loc_value=2.,
-                                               no_overlaps=args.no_overlaps)  #eric func
-
-                #label = uf.get_label_task2(target_path,0.1,file_size,sr_task2,          #giuseppe func
-                #                        sound_classes,int(file_size/(args.frame_len/1000.)),
-                #                        max_label_distance)
-
-
-                #segment into shorter frames
-                if args.predictors_len_segment is not None and args.target_len_segment is not None:
-                    #segment longer file to shorter frames
-                    #not padding if segmenting to avoid silence frames
-                    predictors_cuts, target_cuts = uf.segment_task2(stft, label, predictors_len_segment=args.predictors_len_segment,
-                                                    target_len_segment=args.target_len_segment, overlap=args.segment_overlap)
-
-                    for i in range(len(predictors_cuts)):
-                        predictors.append(predictors_cuts[i])
-                        target.append(target_cuts[i])
-                        #print (predictors_cuts[i].shape, target_cuts[i].shape)
-                else:
-
-                    predictors.append(stft)
-                    target.append(label)
-
-                #print (samples.shape, np.max(label), np.min(label))
-
-                count += 1
-                if args.num_data is not None and count >= args.num_data:
-                    break
-
-
-        return predictors, target
-
+    print("Processing training files")
     train_folder = os.path.join(args.input_path, 'L3DAS_Task2_train')
-    test_folder = os.path.join(args.input_path, 'L3DAS_Task2_dev')
+    # test_folder = os.path.join(args.input_path, 'L3DAS_Task2_dev')
 
-    predictors_train, target_train = process_folder(train_folder, args)
-    predictors_test, target_test = process_folder(test_folder, args)
+    predictors_train, target_train = process_folder_task2(train_folder, args)
+    # predictors_test, target_test = process_folder(test_folder, args)
 
-    predictors_test = np.array(predictors_test)
-    target_test = np.array(target_test)
+    # predictors_test = np.array(predictors_test)
+    # target_test = np.array(target_test)
     #print (predictors_test.shape, target_test.shape)
 
     #split train set into train and development
     split_point = int(len(predictors_train) * args.train_val_split)
     predictors_training = predictors_train[:split_point]    #attention: changed training names
     target_training = target_train[:split_point]
-    predictors_validation = predictors_train[split_point:]
-    target_validation = target_train[split_point:]
+    # predictors_validation = predictors_train[split_point:]
+    # target_validation = target_train[split_point:]
 
     #save numpy matrices into pickle files
     print ('Saving files')
     if not os.path.isdir(args.output_path):
         os.makedirs(args.output_path)
 
+    # print('Training set shape: ', np.array(predictors_training).shape, np.array(target_training).shape)
+    # print('Validation set shape: ', np.array(predictors_validation).shape, np.array(target_validation).shape)
+    # print ('Test set shape: ', np.array(predictors_test).shape, np.array(target_test).shape)
+
     with open(os.path.join(args.output_path,'task2_predictors_train.pkl'), 'wb') as f:
         pickle.dump(predictors_training, f, protocol=4)
-    with open(os.path.join(args.output_path,'task2_predictors_validation.pkl'), 'wb') as f:
-        pickle.dump(predictors_validation, f, protocol=4)
-    with open(os.path.join(args.output_path,'task2_predictors_test.pkl'), 'wb') as f:
-        pickle.dump(predictors_test, f, protocol=4)
+        del predictors_training
+    # with open(os.path.join(args.output_path,'task2_predictors_validation.pkl'), 'wb') as f:
+    #     pickle.dump(predictors_validation, f, protocol=4)
+    #     del predictors_validation
+    # with open(os.path.join(args.output_path,'task2_predictors_test.pkl'), 'wb') as f:
+    #     pickle.dump(predictors_test, f, protocol=4)
+    #     del predictors_test
     with open(os.path.join(args.output_path,'task2_target_train.pkl'), 'wb') as f:
         pickle.dump(target_training, f, protocol=4)
-    with open(os.path.join(args.output_path,'task2_target_validation.pkl'), 'wb') as f:
-        pickle.dump(target_validation, f, protocol=4)
-    with open(os.path.join(args.output_path,'task2_target_test.pkl'), 'wb') as f:
-        pickle.dump(target_test, f, protocol=4)
+        print(f"{f.name} dumped to disk")
+        del target_training
+    # with open(os.path.join(args.output_path,'task2_target_validation.pkl'), 'wb') as f:
+    #     pickle.dump(target_validation, f, protocol=4)
+    #     del target_validation
+    # with open(os.path.join(args.output_path,'task2_target_test.pkl'), 'wb') as f:
+    #     pickle.dump(target_test, f, protocol=4)
+    #     del target_test
 
     print ('Matrices successfully saved')
-    print ('Training set shape: ', np.array(predictors_training).shape, np.array(target_training).shape)
-    print ('Validation set shape: ', np.array(predictors_validation).shape, np.array(target_validation).shape)
-    print ('Test set shape: ', np.array(predictors_test).shape, np.array(target_test).shape)
+
+def parser_reader():
+    parser = argparse.ArgumentParser()
+    # i/o
+    parser.add_argument('--task', type=int,
+                        help='task to be pre-processed')
+    parser.add_argument('--input_path', type=str, default='DATASETS/Task1',
+                        help='directory where the dataset has been downloaded')
+    parser.add_argument('--output_path', type=str, default='DATASETS/processed',
+                        help='where to save the numpy matrices')
+    # processing type
+    parser.add_argument('--train_val_split', type=float, default=0.8,
+                        help='perc split between train and validation sets')
+    parser.add_argument('--num_mics', type=int, default=1,
+                        help='how many ambisonics mics (1 or 2)')
+    parser.add_argument('--num_data', type=int, default=None,
+                        help='how many datapoints per set. 0 means all available data')
+    # task1 only parameters
+    # the following parameters produce 2-seconds waveform frames without overlap,
+    # use only the train100 training set.
+    parser.add_argument('--training_set', type=str, default='train100',
+                        help='which training set: train100, train360 or both')
+    parser.add_argument('--segmentation_len', type=float, default=2,
+                        help='length of segmented frames in seconds')
+    # task2 only parameters
+    # the following stft parameters produce 8 stft fframes per each label frame
+    # if label frames are 100msecs, stft frames are 12.5 msecs
+    # data-points are segmented into 15-seconde windows (150 target frames, 150*8 stft frames)
+    parser.add_argument('--frame_len', type=int, default=100,
+                        help='frame length for SELD evaluation (in msecs)')
+    parser.add_argument('--stft_nperseg', type=int, default=512,
+                        help='num of stft frames')
+    parser.add_argument('--stft_noverlap', type=int, default=112,
+                        help='num of overlapping samples for stft')
+    parser.add_argument('--stft_window', type=str, default='hamming',
+                        help='stft window_type')
+    parser.add_argument('--output_phase', type=str, default='False',
+                        help='concatenate phase channels to stft matrix')
+    parser.add_argument('--predictors_len_segment', type=int, default=None,
+                        help='number of segmented frames for stft data')
+    parser.add_argument('--target_len_segment', type=int, default=None,
+                        help='number of segmented frames for stft data')
+    parser.add_argument('--segment_overlap', type=float, default=None,
+                        help='overlap factor for segmentation')
+    parser.add_argument('--ov_subsets', type=str, default='["ov1", "ov2", "ov3"]',
+                        help='should be a list of strings. Can contain ov1, ov2 and/or ov3')
+    parser.add_argument('--no_overlaps', type=str, default='False',
+                        help='should be a list of strings. Can contain ov1, ov2 and/or ov3')
+
+    args = parser.parse_args()
+
+    args.output_phase = eval(args.output_phase)
+    args.ov_subsets = eval(args.ov_subsets)
+    args.no_overlaps = eval(args.no_overlaps)
+
+    return args
+
+# Read settings from configuration file
+def config_reader():
+    config_path = os.path.join("configs", "default.yaml")
+    with open(config_path, 'r') as f:
+        conf = yaml.safe_load(f)
+    logger.info(f"Loaded configuration file {config_path}")
+
+    return conf
 
 def batch_feature_extraction_dcase2019(dataset_name):
     # Extracts the features, labels, and normalizes the training and test split features. Make sure you update the location
