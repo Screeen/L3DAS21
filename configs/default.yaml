@@ -1,0 +1,3 @@
+# default.yaml
+dataset_format: "dcase2019"  # other option l3das2021
+dataset_name: "ansim"

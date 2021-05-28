@@ -5,6 +5,13 @@ import librosa
 import pickle
 import random
 import utility_functions as uf
+import yaml
+import logging
+
+logger = logging.getLogger(__name__)
+
+from dcase2019 import cls_feature_class
+from dcase2019 import utils
 
 '''
 Process the unzipped dataset folders and output numpy matrices (.pkl files)
@@ -302,63 +309,43 @@ def preprocessing_task2(args):
     print ('Validation set shape: ', np.array(predictors_validation).shape, np.array(target_validation).shape)
     print ('Test set shape: ', np.array(predictors_test).shape, np.array(target_test).shape)
 
+def batch_feature_extraction_dcase2019(dataset_name):
+    # Extracts the features, labels, and normalizes the training and test split features. Make sure you update the location
+    # of the downloaded datasets before in the cls_feature_class.py
 
+    overlaps = [ii + 1 for (ii, el) in enumerate(conf["ov_subsets"])]
+
+    # Extracts feature and labels for all overlap and splits
+    for ovo in overlaps:  # Change to [1] if you are only calculating the features for overlap 1.
+        for splito in [2, 3]:  #  Change to [1] if you are only calculating features for split 1.
+            for nffto in [conf["stft_nperseg"]]:  # use 512 point FFT.
+                feat_cls = cls_feature_class.FeatureClass(ov=ovo, split=splito, nfft=nffto, dataset=dataset_name)
+
+                # Extract features and normalize them
+                feat_cls.extract_all_feature()
+                feat_cls.preprocess_features()
+
+                # # Extract labels in regression mode
+                feat_cls.extract_all_labels('regr', 0)
+
+import cfg
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    #i/o
-    parser.add_argument('--task', type=int,
-                        help='task to be pre-processed')
-    parser.add_argument('--input_path', type=str, default='DATASETS/Task1',
-                        help='directory where the dataset has been downloaded')
-    parser.add_argument('--output_path', type=str, default='DATASETS/processed',
-                        help='where to save the numpy matrices')
-    #processing type
-    parser.add_argument('--train_val_split', type=float, default=0.8,
-                        help='perc split between train and validation sets')
-    parser.add_argument('--num_mics', type=int, default=1,
-                        help='how many ambisonics mics (1 or 2)')
-    parser.add_argument('--num_data', type=int, default=None,
-                        help='how many datapoints per set. 0 means all available data')
-    #task1 only parameters
-    #the following parameters produce 2-seconds waveform frames without overlap,
-    #use only the train100 training set.
-    parser.add_argument('--training_set', type=str, default='train100',
-                        help='which training set: train100, train360 or both')
-    parser.add_argument('--segmentation_len', type=float, default=2,
-                        help='length of segmented frames in seconds')
-    #task2 only parameters
-    #the following stft parameters produce 8 stft fframes per each label frame
-    #if label frames are 100msecs, stft frames are 12.5 msecs
-    #data-points are segmented into 15-seconde windows (150 target frames, 150*8 stft frames)
-    parser.add_argument('--frame_len', type=int, default=100,
-                        help='frame length for SELD evaluation (in msecs)')
-    parser.add_argument('--stft_nperseg', type=int, default=512,
-                        help='num of stft frames')
-    parser.add_argument('--stft_noverlap', type=int, default=112,
-                        help='num of overlapping samples for stft')
-    parser.add_argument('--stft_window', type=str, default='hamming',
-                        help='stft window_type')
-    parser.add_argument('--output_phase', type=str, default='False',
-                        help='concatenate phase channels to stft matrix')
-    parser.add_argument('--predictors_len_segment', type=int, default=None,
-                        help='number of segmented frames for stft data')
-    parser.add_argument('--target_len_segment', type=int, default=None,
-                        help='number of segmented frames for stft data')
-    parser.add_argument('--segment_overlap', type=float, default=None,
-                        help='overlap factor for segmentation')
-    parser.add_argument('--ov_subsets', type=str, default='["ov1", "ov2", "ov3"]',
-                        help='should be a list of strings. Can contain ov1, ov2 and/or ov3')
-    parser.add_argument('--no_overlaps', type=str, default='False',
-                        help='should be a list of strings. Can contain ov1, ov2 and/or ov3')
 
+    cfg.init()
+    utils.setup_logger(os.path.curdir)
 
-    args = parser.parse_args()
+    args = parser_reader()
+    default_conf = config_reader()
+    # Merge argparse and default configuration, giving priority to the ARGPARSE.
+    # Do not update parameters whose value is "None"
+    cfg.conf.update(default_conf)
+    cfg.conf.update((k, v) for k, v in vars(args).items() if v is not None)
 
-    args.output_phase = eval(args.output_phase)
-    args.ov_subsets = eval(args.ov_subsets)
-    args.no_overlaps = eval(args.no_overlaps)
-
-    if args.task == 1:
-        preprocessing_task1(args)
-    elif args.task == 2:
-        preprocessing_task2(args)
+    conf = cfg.conf
+    if conf["dataset_format"] == "l3das2021":
+        if conf.task == 1:
+            preprocessing_task1(conf)
+        elif conf.task == 2:
+            preprocessing_task2(conf)
+    elif conf["dataset_format"] == "dcase2019":
+        batch_feature_extraction_dcase2019(conf["dataset_name"])
