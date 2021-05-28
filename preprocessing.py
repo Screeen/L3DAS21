@@ -345,7 +345,7 @@ def parser_reader():
     # if label frames are 100msecs, stft frames are 12.5 msecs
     # data-points are segmented into 15-seconde windows (150 target frames, 150*8 stft frames)
     parser.add_argument('--frame_len', type=int, default=100,
-                        help='frame length for SELD evaluation (in msecs)')
+                        help='frame length for SELD evaluation (in ms)')
     parser.add_argument('--stft_nperseg', type=int, default=512,
                         help='num of stft frames')
     parser.add_argument('--stft_noverlap', type=int, default=112,
@@ -386,11 +386,12 @@ def batch_feature_extraction_dcase2019(dataset_name):
     # Extracts the features, labels, and normalizes the training and test split features. Make sure you update the location
     # of the downloaded datasets before in the cls_feature_class.py
 
-    overlaps = [ii + 1 for (ii, el) in enumerate(conf["ov_subsets"])]
+    # map "ov1" -> 1
+    overlaps = [ii + 1 for (ii, _) in enumerate(conf["ov_subsets"])]
 
     # Extracts feature and labels for all overlap and splits
     for ovo in overlaps:  # Change to [1] if you are only calculating the features for overlap 1.
-        for splito in [2, 3]:  #  Change to [1] if you are only calculating features for split 1.
+        for splito in [1,2,3,4]:  #  Change to [1] if you are only calculating features for split 1.
             for nffto in [conf["stft_nperseg"]]:  # use 512 point FFT.
                 feat_cls = cls_feature_class.FeatureClass(ov=ovo, split=splito, nfft=nffto, dataset=dataset_name)
 
@@ -406,12 +407,12 @@ if __name__ == '__main__':
 
     cfg.init()
     utils.setup_logger(os.path.curdir)
+    default_conf = config_reader()
+    cfg.conf.update(default_conf)
 
     args = parser_reader()
-    default_conf = config_reader()
     # Merge argparse and default configuration, giving priority to the ARGPARSE.
     # Do not update parameters whose value is "None"
-    cfg.conf.update(default_conf)
     cfg.conf.update((k, v) for k, v in vars(args).items() if v is not None)
 
     conf = cfg.conf

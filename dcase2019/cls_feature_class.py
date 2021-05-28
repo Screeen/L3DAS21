@@ -132,7 +132,8 @@ class FeatureClass:
             logger.error('ERROR: chosen default_ele value {} should not exist in ele_list'.format(self._default_ele))
             exit()
 
-        self._audio_max_len_samples = 30 * self._fs  # TODO: Fix the audio synthesis code to always generate 30s of
+        self._audio_max_len_samples = 30 * self._fs
+        # TODO: Fix the audio synthesis code to always generate 30s of
         # audio. Currently it generates audio till the last active sound event, which is not always 30s long. This is a
         # quick fix to overcome that. We need this because, for processing and training we need the length of features
         # to be fixed.
@@ -366,18 +367,17 @@ class FeatureClass:
 
     # ------------------------------- EXTRACT FEATURE AND PREPROCESS IT -------------------------------
     def extract_all_feature(self, extra=''):
+        logger.info('Extracting spectrogram:')
+        if not(os.path.exists(self._desc_dir)):
+            logger.error(f"self._desc_dir {self._desc_dir} does not exists. Skipping.")
+            return
+
         # setting up folders
         self._feat_dir = self.get_unnormalized_feat_dir(extra)
         utils.create_folder(self._feat_dir)
 
-        # extraction starts
-        logger.info('Extracting spectrogram:')
         logger.info('\t\taud_dir {}\n\t\tdesc_dir {}\n\t\tfeat_dir {}'.format(
             self._aud_dir, self._desc_dir, self._feat_dir))
-
-        if not(os.path.exists(self._desc_dir)):
-            logger.error(f"self._desc_dir {self._desc_dir} does not exists. Skipping.")
-            return
 
         dirs = os.listdir(self._desc_dir)
         for file_cnt, file_name in enumerate(dirs):
@@ -396,7 +396,7 @@ class FeatureClass:
         logger.info('Estimating weights for normalizing feature files:')
         logger.info('\t\tfeat_dir {}'.format(self._feat_dir))
 
-        if not os.path.exists(normalized_features_wts_file):
+        if not os.path.exists(normalized_features_wts_file) and os.path.exists(self._feat_dir):
             spec_scaler = preprocessing.StandardScaler()
             train_cnt = 0
             for file_cnt, file_name in enumerate(os.listdir(self._feat_dir)):
@@ -412,6 +412,10 @@ class FeatureClass:
             )
 
         logger.info('Normalizing feature files:')
+        if not os.path.exists(normalized_features_wts_file):
+            logger.error(f"normalized_features_wts_file {normalized_features_wts_file} does not exists. Skipping.")
+            return
+
         fitted_scaler = joblib.load(normalized_features_wts_file) # load weights again using this command
         for file_cnt, file_name in enumerate(os.listdir(self._feat_dir)):
             logger.info(file_cnt, file_name)
@@ -461,11 +465,12 @@ class FeatureClass:
         logger.info('Extracting spectrogram and labels:')
         logger.info('\t\taud_dir {}\n\t\tdesc_dir {}\n\t\tlabel_dir {}'.format(
             self._aud_dir, self._desc_dir, self._label_dir))
-        utils.create_folder(self._label_dir)
 
         if not(os.path.exists(self._desc_dir)):
             logger.error(f"self._desc_dir {self._desc_dir} does not exists. Skipping.")
             return
+
+        utils.create_folder(self._label_dir)
 
         for file_cnt, file_name in enumerate(os.listdir(self._desc_dir)):
             logger.info('file_cnt {}, file_name {}'.format(file_cnt, file_name))
