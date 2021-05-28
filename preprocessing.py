@@ -259,7 +259,7 @@ def preprocessing_task2(args):
                                  -600: frames
                                  -168: 14 (clases) * 3 (max simultaneous sounds per frame)
                                        concatenated to 14 (classes) * 3 (max simultaneous sounds per frame) * 3 (xyz coordinates)
-    '''
+
     sound_classes=['Chink_and_clink','Computer_keyboard','Cupboard_open_or_close',
              'Drawer_open_or_close','Female_speech_and_woman_speaking',
              'Finger_snapping','Keys_jangling','Knock',
@@ -267,6 +267,7 @@ def preprocessing_task2(args):
              'Printer','Scissors','Telephone','Writing']
     file_size=60.0
     max_label_distance = 2.  #maximum xyz value (serves for normalization)
+    '''
 
     print("Processing training files")
     train_folder = os.path.join(args.input_path, 'L3DAS_Task2_train')
@@ -322,7 +323,7 @@ def parser_reader():
     # i/o
     parser.add_argument('--task', type=int,
                         help='task to be pre-processed')
-    parser.add_argument('--input_path', type=str, default='DATASETS/Task1',
+    parser.add_argument('--input_path', type=str, default='DATASETS',
                         help='directory where the dataset has been downloaded')
     parser.add_argument('--output_path', type=str, default='DATASETS/processed',
                         help='where to save the numpy matrices')
@@ -373,26 +374,18 @@ def parser_reader():
 
     return args
 
-# Read settings from configuration file
-def config_reader():
-    config_path = os.path.join("configs", "default.yaml")
-    with open(config_path, 'r') as f:
-        conf = yaml.safe_load(f)
-    logger.info(f"Loaded configuration file {config_path}")
-
-    return conf
-
 def batch_feature_extraction_dcase2019(dataset_name):
     # Extracts the features, labels, and normalizes the training and test split features. Make sure you update the location
     # of the downloaded datasets before in the cls_feature_class.py
 
     # map "ov1" -> 1
-    overlaps = [ii + 1 for (ii, _) in enumerate(conf["ov_subsets"])]
+    overlaps = [ii + 1 for (ii, _) in enumerate(conf.ov_subsets)]
+    logger.info(f"Processing overlaps {overlaps}")
 
     # Extracts feature and labels for all overlap and splits
     for ovo in overlaps:  # Change to [1] if you are only calculating the features for overlap 1.
         for splito in [1,2,3,4]:  #  Change to [1] if you are only calculating features for split 1.
-            for nffto in [conf["stft_nperseg"]]:  # use 512 point FFT.
+            for nffto in [conf.stft_nperseg]:
                 feat_cls = cls_feature_class.FeatureClass(ov=ovo, split=splito, nfft=nffto, dataset=dataset_name)
 
                 # Extract features and normalize them
@@ -407,19 +400,22 @@ if __name__ == '__main__':
 
     cfg.init()
     utils.setup_logger(os.path.curdir)
-    default_conf = config_reader()
+    default_conf = utils.config_reader()
     cfg.conf.update(default_conf)
 
-    args = parser_reader()
     # Merge argparse and default configuration, giving priority to the ARGPARSE.
+    args = parser_reader()
+    cfg.conf.update(vars(args))
     # Do not update parameters whose value is "None"
-    cfg.conf.update((k, v) for k, v in vars(args).items() if v is not None)
+    # cfg.conf.update((k, v) for k, v in vars(args).items() if v is not None)
 
-    conf = cfg.conf
-    if conf["dataset_format"] == "l3das2021":
+    conf = argparse.Namespace(**(cfg.conf))
+    if conf.dataset_format == "l3das2021":
         if conf.task == 1:
             preprocessing_task1(conf)
         elif conf.task == 2:
             preprocessing_task2(conf)
-    elif conf["dataset_format"] == "dcase2019":
-        batch_feature_extraction_dcase2019(conf["dataset_name"])
+        else:
+            raise ValueError("You must specify --task 1 or --task 2 when dataset_format is l3das2021.")
+    elif conf.dataset_format == "dcase2019":
+        batch_feature_extraction_dcase2019(conf.dataset_name)

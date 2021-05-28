@@ -6,7 +6,7 @@ import torch
 import jiwer
 import librosa
 from pystoi import stoi
-from transformers import Wav2Vec2ForMaskedLM, Wav2Vec2Tokenizer
+# from transformers import Wav2Vec2ForMaskedLM, Wav2Vec2Tokenizer
 import sys, os
 import warnings
 
@@ -22,9 +22,9 @@ on the use of these functions.
 
 #TASK 1 METRICS
 warnings.filterwarnings("ignore", category=FutureWarning)
-transformers.logging.set_verbosity_error()
-wer_tokenizer = Wav2Vec2Tokenizer.from_pretrained("facebook/wav2vec2-base-960h");
-wer_model = Wav2Vec2ForMaskedLM.from_pretrained("facebook/wav2vec2-base-960h");
+# transformers.logging.set_verbosity_error()
+# wer_tokenizer = Wav2Vec2Tokenizer.from_pretrained("facebook/wav2vec2-base-960h");
+# wer_model = Wav2Vec2ForMaskedLM.from_pretrained("facebook/wav2vec2-base-960h");
 
 def wer(clean_speech, denoised_speech):
     """

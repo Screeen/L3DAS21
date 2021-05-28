@@ -415,10 +415,13 @@ class FeatureClass:
         if not os.path.exists(normalized_features_wts_file):
             logger.error(f"normalized_features_wts_file {normalized_features_wts_file} does not exists. Skipping.")
             return
+        if not os.path.exists(self._feat_dir):
+            logger.error(f"self._feat_dir {self._feat_dir} does not exists. Skipping.")
+            return
 
         fitted_scaler = joblib.load(normalized_features_wts_file) # load weights again using this command
         for file_cnt, file_name in enumerate(os.listdir(self._feat_dir)):
-            logger.info(file_cnt, file_name)
+            logger.info(f"{file_cnt}, {file_name}")
             if not os.path.exists(os.path.join(self._feat_dir_norm, file_name)):
                 feat_file = np.load(os.path.join(self._feat_dir, file_name))
                 feat_file = fitted_scaler.transform(np.concatenate((np.abs(feat_file), np.angle(feat_file)), axis=1))

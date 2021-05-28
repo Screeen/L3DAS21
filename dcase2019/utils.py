@@ -7,9 +7,18 @@ import sys
 import logging.config
 from shutil import copytree, rmtree
 import fnmatch
-
+import yaml
 
 logger = logging.getLogger(__name__)
+
+# Read settings from configuration file
+def config_reader():
+    config_path = os.path.join("configs", "default.yaml")
+    with open(config_path, 'r') as f:
+        conf = yaml.safe_load(f)
+    logger.info(f"Loaded configuration file {config_path}")
+
+    return conf
 
 def create_folder(folder_name):
     if not os.path.exists(folder_name):

@@ -9,6 +9,11 @@ import torch
 import torch.nn as nn
 from torch.optim import Adam
 import torch.utils.data as utils
+import cfg
+from dcase2019 import dcase_dataset
+from dcase2019 import utils as dutils
+
+from dcase2019.dcase_dataset import DcaseDataset
 from models.SELDNet import Seldnet_vanilla, Seldnet_augmented
 from utility_functions import load_model, save_model
 
@@ -61,24 +66,7 @@ def seld_loss(x, target, model, criterion_sed, criterion_doa):
     return loss_sed + loss_doa
 
 
-def main(args):
-    if args.use_cuda:
-        device = 'cuda:' + str(args.gpu_id)
-    else:
-        device = 'cpu'
-
-    if args.fixed_seed:
-        seed = 1
-        np.random.seed(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-        torch.manual_seed(seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(seed)
-
-    #LOAD DATASET
-    print ('\nLoading dataset')
-
+def load_datasets_using_pickle(args):
     with open(args.training_predictors_path, 'rb') as f:
         training_predictors = pickle.load(f)
     with open(args.training_target_path, 'rb') as f:
@@ -124,10 +112,49 @@ def main(args):
     tr_data = utils.DataLoader(tr_dataset, args.batch_size, shuffle=True, pin_memory=True)
     val_data = utils.DataLoader(val_dataset, args.batch_size, shuffle=False, pin_memory=True)
     test_data = utils.DataLoader(test_dataset, args.batch_size, shuffle=False, pin_memory=True)
+    
+    return tr_data, val_data, test_data, len(tr_dataset), test_predictors.shape[-1]
+
+def main(args):
+
+    cfg.init()
+    dutils.setup_logger(os.path.curdir)
+    default_conf = dutils.config_reader()
+    cfg.conf.update(default_conf)
+
+    # Merge argparse and default configuration
+    cfg.conf.update(vars(args))
+
+    cfg.conf = argparse.Namespace(**(cfg.conf))
+    args = cfg.conf
+
+    if args.use_cuda:
+        device = 'cuda:' + str(args.gpu_id)
+    else:
+        device = 'cpu'
+
+    if args.fixed_seed:
+        seed = 1
+        np.random.seed(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+
+    #LOAD DATASET
+    print ('\nLoading dataset')
+
+    if args.dataset_format == 'dcase2019':
+        features_dir, labels_dir = dcase_dataset.load_dir_names()
+        training_set = DcaseDataset(features_dir, labels_dir)
+        n_time_frames = training_set.__getitem__(0)[0].shape[0]
+        len_tr_dataset = training_set.__len__()
+    else:
+        tr_data, val_data, test_data, len_tr_dataset, n_time_frames = load_datasets_using_pickle(args)
 
     #LOAD MODEL
     if args.architecture == 'seldnet_vanilla':
-        n_time_frames = test_predictors.shape[-1]
         model = Seldnet_vanilla(time_dim=n_time_frames, freq_dim=args.freq_dim, input_channels=args.input_channels,
                     output_classes=args.output_classes, pool_size=args.pool_size,
                     pool_time=args.pool_time, rnn_size=args.rnn_size, n_rnn=args.n_rnn,
@@ -135,7 +162,6 @@ def main(args):
                     n_cnn_filters=args.n_cnn_filters, class_overlaps=args.class_overlaps,
                     verbose=args.verbose)
     if args.architecture == 'seldnet_augmented':
-        n_time_frames = test_predictors.shape[-1]
         model = Seldnet_augmented(time_dim=n_time_frames, freq_dim=args.freq_dim, input_channels=args.input_channels,
                     output_classes=args.output_classes, pool_size=args.pool_size,
                     pool_time=args.pool_time, rnn_size=args.rnn_size, n_rnn=args.n_rnn,
@@ -179,7 +205,7 @@ def main(args):
         avg_time = 0.
         model.train()
         train_loss = 0.
-        with tqdm(total=len(tr_dataset) // args.batch_size) as pbar:
+        with tqdm(total=len_tr_dataset // args.batch_size) as pbar:
             for example_num, (x, target) in enumerate(tr_data):
                 target = target.to(device)
                 x = x.to(device)
