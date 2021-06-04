@@ -150,6 +150,7 @@ def main(args):
         training_set = DcaseDataset(features_dir, labels_dir)
         n_time_frames = training_set.__getitem__(0)[0].shape[0]
         len_tr_dataset = training_set.__len__()
+        sample_item = training_set.__getitem__(1)
     else:
         tr_data, val_data, test_data, len_tr_dataset, n_time_frames = load_datasets_using_pickle(args)
 

@@ -19,6 +19,21 @@ def load_dir_names():
     labels_dir = os.path.join(dataset_root, label_formatted_name)
     return features_dir, labels_dir
 
+def discard_spare_frames(tensor, sequence_length):
+    remainder = tensor.shape[0] % sequence_length 
+    if remainder:
+        tensor = tensor[:-remainder, ...]
+    return tensor
+
+def split_in_seqs(tensor, sequence_length):
+    discard_spare_frames(tensor, sequence_length)
+    if tensor.ndim == 2:
+        tensor.reshape((tensor.shape[0] // sequence_length, sequence_length), -1)
+    elif tensor.ndim == 3:
+        tensor.reshape((tensor.shape[0] // sequence_length, sequence_length), -1, tensor.shape[-1])
+    return tensor
+
+
 class DcaseDataset(Dataset):
     def __init__(self, features_dir, labels_dir, feature_transform=None, label_transform=None):
         self.features_dir = features_dir
